@@ -223,7 +223,7 @@ class PronunciationMaster:
         
         # Create character
         char_width, char_height = CHARACTER_WIDTH, CHARACTER_HEIGHT
-        self.guide = Character("Teacher", "../assets/guide.png", 
+        self.guide = Character("Teacher", "assets/guide.png", 
                               50, 100, char_width, char_height)
         
         # Create UI elements
@@ -240,6 +240,10 @@ class PronunciationMaster:
         self.toggle_button = Button(WINDOW_WIDTH // 2 - 200, 500, 180, 40, "Pause Auto Mode")
         self.next_level_button = Button(WINDOW_WIDTH // 2 + 20, 500, 180, 40, "Next Level")
         self.next_level_button.enabled = False
+        
+        # Start screen buttons
+        self.resume_button = Button(WINDOW_WIDTH // 2 - 100, 250, 200, 50, "Resume Latest Level", BLUE)
+        self.restart_button = Button(WINDOW_WIDTH // 2 - 100, 320, 200, 50, "Start from Level 1", GREEN)
         
         # Initialize speech recognizer
         self.recognizer = sr.Recognizer()
@@ -262,44 +266,80 @@ class PronunciationMaster:
         self.auto_mode = True
         self.auto_listening = False
         self.generating_sentences = False
+        self.game_started = False
+        self.has_saved_progress = os.path.exists("pronunciation_progress.json")
+        self.used_sentences = set()  # Track all used sentences across levels
         
-        # Initialize levels
-        self.initialize_levels()
+        # Load levels but don't start yet
+        self.preload_levels()
         
-    def initialize_levels(self):
+    def preload_levels(self):
+        """Preload levels without starting the game"""
+        # Check if saved progress is available
+        self.has_saved_progress = self.load_progress(start_game=False)
+        
+    def initialize_levels(self, restart=False):
         """Initialize game levels with sentences"""
-        # Load saved progress if available
-        self.load_progress()
-        
-        # If no saved progress, create new levels
-        if not self.levels:
+        # If restart requested or no saved progress, create new levels
+        if restart or not self.levels:
             self.levels = []
+            # Track all used sentences to avoid repetition across levels
+            used_sentences = set()
+            
             # Create 10 levels with randomized sentences
             for level_num in range(1, 11):
                 # Generate sentences for this level
                 level_sentences = self.generate_sentences_for_level(level_num)
                 
-                # Always select exactly 5 sentences for each level (for 20% per sentence)
-                if level_sentences and len(level_sentences) >= 5:
-                    selected = random.sample(level_sentences, 5)
-                    self.levels.append(Level(level_num, f"Level {level_num}", selected))
+                # Filter out sentences that have been used in previous levels
+                available_sentences = [s for s in level_sentences if s["sentence"] not in used_sentences]
                 
+                # If we don't have enough unique sentences, generate more
+                attempts = 0
+                while len(available_sentences) < 5 and attempts < 3:
+                    more_sentences = self.generate_sentences_for_level(level_num)
+                    for s in more_sentences:
+                        if s["sentence"] not in used_sentences:
+                            available_sentences.append(s)
+                    attempts += 1
+                
+                # Select 5 sentences for this level
+                if available_sentences and len(available_sentences) >= 5:
+                    selected = random.sample(available_sentences, 5)
+                    
+                    # Add these sentences to the used set
+                    for s in selected:
+                        used_sentences.add(s["sentence"])
+                        
+                    self.levels.append(Level(level_num, f"Level {level_num}", selected))
+            
             # Start with level 1
             self.current_level = 0
             
+        # Start the game
+        self.game_started = True
         self.next_sentence()
     
     def generate_sentences_for_level(self, level_num):
         """Generate sentences for a specific level"""
         difficulty = "easy"
+        complexity = ""
+        
         if level_num >= 8:
             difficulty = "hard"
+            complexity = "Include complex vocabulary, technical terms, and challenging pronunciation patterns."
         elif level_num >= 4:
             difficulty = "medium"
+            complexity = "Include some challenging words and varied sentence structures."
+        else:
+            complexity = "Use simple vocabulary and straightforward sentence structures."
             
         prompt = f"""
-        Generate 5 English sentences for pronunciation practice at {difficulty} level.
-        Each sentence should be in a different context.
+        Generate 8 English sentences for pronunciation practice at {difficulty} level.
+        {complexity}
+        For level {level_num}, make sentences progressively more challenging than previous levels.
+        Each sentence should be in a different context (business, academic, social, etc.).
+        Make sure sentences are unique and not similar to common phrases.
         For each sentence, provide a pronunciation tip focusing on 1-2 challenging words or sounds.
         Format your response as a JSON array of objects with 'sentence', 'context', and 'pronunciation_tip' fields.
         """
@@ -323,8 +363,15 @@ class PronunciationMaster:
     def save_progress(self):
         """Save game progress to file"""
         try:
+            # Collect all used sentences across levels
+            all_sentences = set()
+            for level in self.levels:
+                for sentence_data in level.sentences:
+                    all_sentences.add(sentence_data["sentence"])
+            
             save_data = {
                 "current_level": self.current_level,
+                "used_sentences": list(all_sentences),
                 "levels": []
             }
             
@@ -347,7 +394,7 @@ class PronunciationMaster:
         except Exception as e:
             print(f"Error saving progress: {e}")
     
-    def load_progress(self):
+    def load_progress(self, start_game=True):
         """Load game progress from file"""
         try:
             if os.path.exists("pronunciation_progress.json"):
@@ -356,6 +403,9 @@ class PronunciationMaster:
                 
                 self.current_level = save_data.get("current_level", 0)
                 self.levels = []
+                
+                # Load used sentences
+                self.used_sentences = set(save_data.get("used_sentences", []))
                 
                 # Load each level
                 for level_data in save_data.get("levels", []):
@@ -592,6 +642,39 @@ class PronunciationMaster:
             self.toggle_button.text = "Resume Auto Mode"
             self.status_display.set_status("Auto mode paused")
         
+    def draw_start_screen(self):
+        """Draw the start screen with resume/restart options"""
+        self.screen.fill(BLACK)
+        
+        # Draw title
+        title_font = pygame.font.Font(None, 60)
+        title_text = "Pronunciation Master"
+        title_surface = title_font.render(title_text, True, WHITE)
+        title_rect = title_surface.get_rect(center=(WINDOW_WIDTH // 2, 120))
+        self.screen.blit(title_surface, title_rect)
+        
+        # Draw subtitle
+        subtitle_font = pygame.font.Font(None, 30)
+        subtitle_text = "Improve your pronunciation with 10 levels of practice"
+        subtitle_surface = subtitle_font.render(subtitle_text, True, LIGHT_BLUE)
+        subtitle_rect = subtitle_surface.get_rect(center=(WINDOW_WIDTH // 2, 170))
+        self.screen.blit(subtitle_surface, subtitle_rect)
+        
+        # Draw buttons
+        self.resume_button.draw(self.screen)
+        self.restart_button.draw(self.screen)
+        
+        # Disable resume button if no saved progress
+        self.resume_button.enabled = self.has_saved_progress
+        
+        # Draw saved progress info if available
+        if self.has_saved_progress and self.levels:
+            info_font = pygame.font.Font(None, 24)
+            level_info = f"Saved progress: Level {self.current_level + 1} of 10"
+            info_surface = info_font.render(level_info, True, WHITE)
+            info_rect = info_surface.get_rect(center=(WINDOW_WIDTH // 2, 400))
+            self.screen.blit(info_surface, info_rect)
+    
     def run(self):
         running = True
         while running:
@@ -601,52 +684,73 @@ class PronunciationMaster:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     # Save progress before quitting
-                    self.save_progress()
+                    if self.game_started:
+                        self.save_progress()
                     running = False
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     mouse_click = True
             
-            # Update button hover states
-            self.toggle_button.check_hover(mouse_pos)
-            self.next_level_button.check_hover(mouse_pos)
-            
-            # Handle button clicks
-            if self.toggle_button.is_clicked(mouse_pos, mouse_click):
-                self.toggle_auto_mode()
-            if self.next_level_button.is_clicked(mouse_pos, mouse_click):
-                self.go_to_next_level()
-            
-            # Draw everything
-            self.screen.fill(BLACK)
-            self.guide.draw(self.screen)
-            self.sentence_display.draw(self.screen)
-            self.feedback_display.draw(self.screen)
-            self.status_display.draw(self.screen)
-            self.toggle_button.draw(self.screen)
-            self.next_level_button.draw(self.screen)
-            
-            # Draw level info and progress
-            if self.levels and self.current_level < len(self.levels):
-                current = self.levels[self.current_level]
-                level_font = pygame.font.Font(None, 30)
+            # Show start screen if game not started
+            if not self.game_started:
+                # Update start screen button hover states
+                self.resume_button.check_hover(mouse_pos)
+                self.restart_button.check_hover(mouse_pos)
                 
-                # Level info
-                level_text = f"Level {current.level_num} - {current.difficulty}"
-                level_surface = level_font.render(level_text, True, WHITE)
-                self.screen.blit(level_surface, (50, 20))
+                # Handle start screen button clicks
+                if self.resume_button.is_clicked(mouse_pos, mouse_click) and self.has_saved_progress:
+                    # Resume from saved progress
+                    self.load_progress()
+                    self.game_started = True
+                    self.next_sentence()
+                elif self.restart_button.is_clicked(mouse_pos, mouse_click):
+                    # Start new game from level 1
+                    self.initialize_levels(restart=True)
                 
-                # Progress
-                completed, total = current.get_progress()
-                progress_text = f"Progress: {completed}/{total} sentences"
-                progress_surface = level_font.render(progress_text, True, WHITE)
-                self.screen.blit(progress_surface, (WINDOW_WIDTH - 250, 20))
+                # Draw start screen
+                self.draw_start_screen()
+            else:
+                # Game is running - handle game UI
+                # Update button hover states
+                self.toggle_button.check_hover(mouse_pos)
+                self.next_level_button.check_hover(mouse_pos)
                 
-                # Completion percentage
-                completion = current.get_completion_percentage()
-                completion_text = f"Completion: {int(completion)}%"
-                completion_surface = level_font.render(completion_text, True, 
-                                                     GREEN if completion >= 70 else LIGHT_BLUE)
-                self.screen.blit(completion_surface, (WINDOW_WIDTH - 250, 50))
+                # Handle button clicks
+                if self.toggle_button.is_clicked(mouse_pos, mouse_click):
+                    self.toggle_auto_mode()
+                if self.next_level_button.is_clicked(mouse_pos, mouse_click):
+                    self.go_to_next_level()
+                
+                # Draw everything
+                self.screen.fill(BLACK)
+                self.guide.draw(self.screen)
+                self.sentence_display.draw(self.screen)
+                self.feedback_display.draw(self.screen)
+                self.status_display.draw(self.screen)
+                self.toggle_button.draw(self.screen)
+                self.next_level_button.draw(self.screen)
+                
+                # Draw level info and progress
+                if self.levels and self.current_level < len(self.levels):
+                    current = self.levels[self.current_level]
+                    level_font = pygame.font.Font(None, 30)
+                    
+                    # Level info
+                    level_text = f"Level {current.level_num} - {current.difficulty}"
+                    level_surface = level_font.render(level_text, True, WHITE)
+                    self.screen.blit(level_surface, (50, 20))
+                    
+                    # Progress
+                    completed, total = current.get_progress()
+                    progress_text = f"Progress: {completed}/{total} sentences"
+                    progress_surface = level_font.render(progress_text, True, WHITE)
+                    self.screen.blit(progress_surface, (WINDOW_WIDTH - 250, 20))
+                    
+                    # Completion percentage
+                    completion = current.get_completion_percentage()
+                    completion_text = f"Completion: {int(completion)}%"
+                    completion_surface = level_font.render(completion_text, True, 
+                                                         GREEN if completion >= 70 else LIGHT_BLUE)
+                    self.screen.blit(completion_surface, (WINDOW_WIDTH - 250, 50))
             
             pygame.display.flip()
             self.clock.tick(FPS)

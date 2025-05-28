@@ -87,7 +87,13 @@ class BedrockClient:
                  "pronunciation_tip": "Focus on 'size'"},
                 {"sentence": "What time does the movie start?", 
                  "context": "Entertainment", 
-                 "pronunciation_tip": "Focus on 'what time'"}
+                 "pronunciation_tip": "Focus on 'what time'"},
+                {"sentence": "Can I have a glass of water please?", 
+                 "context": "Restaurant", 
+                 "pronunciation_tip": "Practice 'glass' and 'water'"},
+                {"sentence": "How was your weekend?", 
+                 "context": "Casual conversation", 
+                 "pronunciation_tip": "Focus on 'weekend'"}
             ]
         elif difficulty == "medium":
             return [
@@ -108,9 +114,15 @@ class BedrockClient:
                  "pronunciation_tip": "Practice 'public transportation'"},
                 {"sentence": "Could you explain how this device works?", 
                  "context": "Technology", 
-                 "pronunciation_tip": "Focus on 'explain' and 'device'"}
+                 "pronunciation_tip": "Focus on 'explain' and 'device'"},
+                {"sentence": "We should consider all available options carefully.", 
+                 "context": "Decision making", 
+                 "pronunciation_tip": "Practice 'consider' and 'available'"},
+                {"sentence": "The customer service was excellent at that hotel.", 
+                 "context": "Travel review", 
+                 "pronunciation_tip": "Practice 'customer service'"}
             ]
-        else:  # hard or advanced
+        elif difficulty == "hard":
             return [
                 {"sentence": "The pharmaceutical company announced a revolutionary treatment.", 
                  "context": "News report", 
@@ -129,5 +141,38 @@ class BedrockClient:
                  "pronunciation_tip": "Focus on 'environmentalist' and 'sustainability'"},
                 {"sentence": "The archaeologist discovered an extraordinary ancient civilization.", 
                  "context": "Historical discovery", 
-                 "pronunciation_tip": "Focus on 'archaeologist' and 'extraordinary'"}
+                 "pronunciation_tip": "Focus on 'archaeologist' and 'extraordinary'"},
+                {"sentence": "The university professor published a controversial research paper.", 
+                 "context": "Academic news", 
+                 "pronunciation_tip": "Focus on 'controversial' and 'research'"},
+                {"sentence": "We need to thoroughly analyze the quarterly financial results.", 
+                 "context": "Business meeting", 
+                 "pronunciation_tip": "Practice 'thoroughly' and 'quarterly'"}
+            ]
+        else:  # advanced
+            return [
+                {"sentence": "The interdisciplinary approach facilitated unprecedented scientific breakthroughs.", 
+                 "context": "Scientific methodology", 
+                 "pronunciation_tip": "Focus on 'interdisciplinary' and 'unprecedented'"},
+                {"sentence": "The socioeconomic implications of technological automation are extensively debated.", 
+                 "context": "Economic analysis", 
+                 "pronunciation_tip": "Practice 'socioeconomic' and 'extensively'"},
+                {"sentence": "The neuropsychological assessment revealed fascinating cognitive patterns.", 
+                 "context": "Medical diagnosis", 
+                 "pronunciation_tip": "Focus on 'neuropsychological' and 'cognitive'"},
+                {"sentence": "The telecommunications infrastructure requires substantial modernization investments.", 
+                 "context": "Technology planning", 
+                 "pronunciation_tip": "Practice 'telecommunications' and 'infrastructure'"},
+                {"sentence": "The constitutional amendment generated considerable political controversy.", 
+                 "context": "Legal discussion", 
+                 "pronunciation_tip": "Focus on 'constitutional' and 'controversy'"},
+                {"sentence": "The pharmaceutical conglomerate's acquisition strategy raised regulatory concerns.", 
+                 "context": "Business ethics", 
+                 "pronunciation_tip": "Practice 'conglomerate's' and 'regulatory'"},
+                {"sentence": "The electroencephalographic measurements indicated abnormal neurophysiological activity patterns.", 
+                 "context": "Neuroscience research", 
+                 "pronunciation_tip": "Focus on 'electroencephalographic' and 'neurophysiological'"},
+                {"sentence": "The phenomenological interpretation of quantum mechanics remains philosophically controversial.", 
+                 "context": "Theoretical physics", 
+                 "pronunciation_tip": "Practice 'phenomenological' and 'philosophically'"}
             ]
