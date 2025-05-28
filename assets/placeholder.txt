@@ -1,0 +1,5 @@
+Place character images here:
+- player.png - For the player character
+- guide.png - For the AI guide character
+
+Images should be portrait-oriented with dimensions around 200x300 pixels.

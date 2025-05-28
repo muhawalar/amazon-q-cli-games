@@ -1,0 +1,5 @@
+pygame>=2.0.0
+boto3>=1.26.0
+SpeechRecognition>=3.8.1
+PyAudio>=0.2.11
+gTTS>=2.2.3
