@@ -1,5 +1,3 @@
-# Game configuration settings
-
 # Window settings
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
@@ -9,24 +7,20 @@ FPS = 60
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-GRAY = (200, 200, 200)
+GRAY = (100, 100, 100)
 DARK_GRAY = (50, 50, 50)
-BLUE = (0, 0, 255)
-LIGHT_BLUE = (173, 216, 230)
-GREEN = (0, 255, 0)
-RED = (255, 0, 0)
-YELLOW = (255, 255, 0)
-PURPLE = (128, 0, 128)
+RED = (255, 50, 50)
+GREEN = (50, 255, 50)
+BLUE = (50, 50, 255)
+LIGHT_BLUE = (100, 150, 255)
 
-# Text settings
-FONT_SIZE = 20
-
-# Character settings
+# UI settings
+FONT_SIZE = 24
 CHARACTER_WIDTH = 200
 CHARACTER_HEIGHT = 300
 
-# Bedrock settings
-MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"
-MAX_TOKENS = 300
-USE_MOCK = True  # Set to False when AWS credentials are properly configured
+# AWS settings
+MODEL_ID = "anthropic.claude-v2"
 AWS_REGION = "us-east-1"
+USE_MOCK = False  # Set to False to use actual Bedrock API
+USE_DYNAMIC_SENTENCES = True  # Set to False to use hardcoded sentences

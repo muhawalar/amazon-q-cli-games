@@ -187,28 +187,50 @@ class Level:
         self.completed_sentences = set()
         self.score = 0
         self.total_attempts = 0
-        self.points_per_sentence = 20  # Each sentence is worth 20%
         self.required_score = 70  # 70% to pass
+        self.current_index = 0  # Track current position in sentences
         
     def is_completed(self):
         return self.get_completion_percentage() >= self.required_score
         
     def get_next_sentence(self):
+        # Get sentences that haven't been completed yet
         available = [s for s in self.sentences if s["sentence"] not in self.completed_sentences]
-        if not available:
+        if available:
+            return random.choice(available)
+        
+        # If all sentences are completed, return None to indicate level completion
+        if len(self.completed_sentences) >= len(self.sentences):
             return None
-        return random.choice(available)
+            
+        # Fallback: return any sentence that hasn't been tried yet
+        for i in range(len(self.sentences)):
+            idx = (self.current_index + i) % len(self.sentences)
+            self.current_index = (idx + 1) % len(self.sentences)
+            return self.sentences[idx]
+            
+        # If we get here, something is wrong with the sentences list
+        return None
         
     def mark_sentence_completed(self, sentence, points=1):
-        self.completed_sentences.add(sentence)
-        self.score += self.points_per_sentence * points
+        # Only add to completed sentences if not already there
+        if sentence not in self.completed_sentences:
+            self.completed_sentences.add(sentence)
+            # Calculate score based on completed sentences and total sentences
+            # Each sentence is worth exactly 20% (for 5 sentences)
+            self.score = (len(self.completed_sentences) / len(self.sentences)) * 100
+            # Print debug info
+            print(f"Completed: {len(self.completed_sentences)}/{len(self.sentences)} sentences")
         self.total_attempts += 1
         
     def get_progress(self):
         return len(self.completed_sentences), len(self.sentences)
         
     def get_completion_percentage(self):
-        return min(self.score, 100)  # Cap at 100%
+        # Calculate percentage directly from completed sentences
+        if not self.sentences:
+            return 0
+        return min((len(self.completed_sentences) / len(self.sentences)) * 100, 100)  # Cap at 100%
 
 class PronunciationMaster:
     def __init__(self):
@@ -223,7 +245,7 @@ class PronunciationMaster:
         
         # Create character
         char_width, char_height = CHARACTER_WIDTH, CHARACTER_HEIGHT
-        self.guide = Character("Teacher", "assets/guide.png", 
+        self.guide = Character("Teacher", "assets/avatar.png", 
                               50, 100, char_width, char_height)
         
         # Create UI elements
@@ -244,6 +266,8 @@ class PronunciationMaster:
         # Start screen buttons
         self.resume_button = Button(WINDOW_WIDTH // 2 - 100, 250, 200, 50, "Resume Latest Level", BLUE)
         self.restart_button = Button(WINDOW_WIDTH // 2 - 100, 320, 200, 50, "Start from Level 1", GREEN)
+        self.toggle_dynamic_button = Button(WINDOW_WIDTH // 2 - 100, 390, 200, 50, 
+                                          "Dynamic: " + ("ON" if USE_DYNAMIC_SENTENCES else "OFF"), LIGHT_BLUE)
         
         # Initialize speech recognizer
         self.recognizer = sr.Recognizer()
@@ -269,6 +293,7 @@ class PronunciationMaster:
         self.game_started = False
         self.has_saved_progress = os.path.exists("pronunciation_progress.json")
         self.used_sentences = set()  # Track all used sentences across levels
+        self.use_dynamic_sentences = USE_DYNAMIC_SENTENCES  # Use dynamic sentence generation
         
         # Load levels but don't start yet
         self.preload_levels()
@@ -280,7 +305,8 @@ class PronunciationMaster:
         
     def initialize_levels(self, restart=False):
         """Initialize game levels with sentences"""
-        # If restart requested or no saved progress, create new levels
+        # Always create new levels when restarting or if no saved progress
+        # This ensures we get fresh sentences from Bedrock each time
         if restart or not self.levels:
             self.levels = []
             # Track all used sentences to avoid repetition across levels
@@ -316,29 +342,58 @@ class PronunciationMaster:
             # Start with level 1
             self.current_level = 0
             
+            # Save the newly generated levels immediately
+            self.save_progress()
+            
         # Start the game
         self.game_started = True
         self.next_sentence()
     
     def generate_sentences_for_level(self, level_num):
         """Generate sentences for a specific level"""
-        difficulty = "easy"
-        complexity = ""
+        # Level-specific configurations
+        level_configs = {
+            1: {"difficulty": "easy", "focus": "basic greetings and introductions", 
+                "length": "5-7 words", "phonemes": "simple consonants and vowels"},
+            2: {"difficulty": "easy", "focus": "daily activities and routines", 
+                "length": "6-8 words", "phonemes": "th, r, l sounds"},
+            3: {"difficulty": "easy", "focus": "shopping and numbers", 
+                "length": "7-9 words", "phonemes": "s, z, sh sounds"},
+            4: {"difficulty": "medium", "focus": "work and education", 
+                "length": "8-10 words", "phonemes": "ch, j, v sounds"},
+            5: {"difficulty": "medium", "focus": "travel and directions", 
+                "length": "9-11 words", "phonemes": "w, y, compound sounds"},
+            6: {"difficulty": "medium", "focus": "food and dining", 
+                "length": "10-12 words", "phonemes": "diphthongs and blends"},
+            7: {"difficulty": "medium", "focus": "health and fitness", 
+                "length": "10-12 words", "phonemes": "consonant clusters"},
+            8: {"difficulty": "hard", "focus": "technology and science", 
+                "length": "11-13 words", "phonemes": "complex consonant clusters"},
+            9: {"difficulty": "hard", "focus": "business and economics", 
+                "length": "12-14 words", "phonemes": "stress patterns and rhythm"},
+            10: {"difficulty": "hard", "focus": "arts, culture and philosophy", 
+                "length": "13-15 words", "phonemes": "advanced pronunciation patterns"}
+        }
         
-        if level_num >= 8:
-            difficulty = "hard"
-            complexity = "Include complex vocabulary, technical terms, and challenging pronunciation patterns."
-        elif level_num >= 4:
-            difficulty = "medium"
-            complexity = "Include some challenging words and varied sentence structures."
-        else:
-            complexity = "Use simple vocabulary and straightforward sentence structures."
+        # Get config for this level or use default
+        config = level_configs.get(level_num, {
+            "difficulty": "medium",
+            "focus": "general topics",
+            "length": "8-12 words",
+            "phonemes": "mixed sounds"
+        })
+        
+        difficulty = config["difficulty"]
+        focus = config["focus"]
+        length = config["length"]
+        phonemes = config["phonemes"]
             
         prompt = f"""
         Generate 8 English sentences for pronunciation practice at {difficulty} level.
-        {complexity}
-        For level {level_num}, make sentences progressively more challenging than previous levels.
-        Each sentence should be in a different context (business, academic, social, etc.).
+        Focus on topics related to {focus}.
+        Sentences should be {length} in length.
+        Include practice for these phonemes: {phonemes}.
+        Each sentence should be in a different context.
         Make sure sentences are unique and not similar to common phrases.
         For each sentence, provide a pronunciation tip focusing on 1-2 challenging words or sounds.
         Format your response as a JSON array of objects with 'sentence', 'context', and 'pronunciation_tip' fields.
@@ -432,19 +487,23 @@ class PronunciationMaster:
             return False
             
         current = self.levels[self.current_level]
+        
+        # Check if all sentences are completed
+        completed, total = current.get_progress()
+        if completed == total:
+            # All sentences completed
+            self.feedback_display.set_feedback(f"Level {current.level_num} completed! You can move to the next level.", "", True)
+            self.next_level_button.enabled = True
+            return True
+            
+        # Get a sentence that hasn't been completed yet
         sentence_data = current.get_next_sentence()
         
+        # If no sentence is returned, reset the current index to ensure we cycle through all sentences
         if not sentence_data:
-            # All sentences in this level have been used
-            if current.is_completed():
-                self.feedback_display.set_feedback(f"Level {current.level_num} completed! You can move to the next level.", "", True)
-                self.next_level_button.enabled = True
-            else:
-                self.feedback_display.set_feedback(f"You need more practice to complete this level. Try again!", "", False)
-                # Reset completed sentences to try again
-                current.completed_sentences = set()
-                sentence_data = current.get_next_sentence()
-        
+            current.current_index = 0
+            sentence_data = current.get_next_sentence()
+            
         if not sentence_data:
             return False
             
@@ -551,12 +610,15 @@ class PronunciationMaster:
             
             # Compare with current sentence
             if user_said == expected:
-                # Mark sentence as completed with full points
+                # Mark sentence as completed
                 current_level = self.levels[self.current_level]
-                current_level.mark_sentence_completed(self.current_sentence, 1.0)
+                current_level.mark_sentence_completed(self.current_sentence)
                 
-                self.feedback_display.set_feedback(f"Excellent! You said it perfectly.", 
+                self.feedback_display.set_feedback("Excellent! You said it perfectly.", 
                                                 self.current_pronunciation_tip, True)
+                
+                # Save progress after completing a sentence
+                self.save_progress()
                 
                 # Wait a moment to show feedback, then move to next sentence
                 time.sleep(1.5)
@@ -570,35 +632,33 @@ class PronunciationMaster:
                 current_level = self.levels[self.current_level]
                 
                 if similarity > 0.8:
-                    # Mark sentence as completed with partial points
-                    current_level.mark_sentence_completed(self.current_sentence, 0.8)
+                    # Mark sentence as completed
+                    current_level.mark_sentence_completed(self.current_sentence)
                     
                     self.feedback_display.set_feedback(f"Very good! You said: {user_said}", 
                                                     self.current_pronunciation_tip, True)
+                    
+                    # Save progress after completing a sentence
+                    self.save_progress()
                     
                     # Wait a moment to show feedback, then move to next sentence
                     time.sleep(1.5)
                     if self.auto_mode:
                         self.next_sentence()
-                elif similarity > 0.5:
-                    # Don't mark as completed, just give feedback
-                    self.feedback_display.set_feedback(f"Not bad. You said: {user_said}", 
-                                                    self.current_pronunciation_tip, False)
-                    
-                    # Try again after showing feedback
-                    time.sleep(2)
-                    if self.auto_mode:
-                        self.play_audio()
                 else:
-                    # Don't mark as completed, just give feedback
-                    self.feedback_display.set_feedback(f"Try again. You said: {user_said}", 
-                                                    self.current_pronunciation_tip, False)
+                    # Don't mark as completed, just give feedback and try again
+                    if similarity > 0.5:
+                        feedback = f"Not bad. You said: {user_said}"
+                    else:
+                        feedback = f"Try again. You said: {user_said}"
+                        
+                    self.feedback_display.set_feedback(feedback, self.current_pronunciation_tip, False)
                     
-                    # Try again after showing feedback
+                    # Try again after showing feedback - stay on the same sentence
                     time.sleep(2)
                     if self.auto_mode:
                         self.play_audio()
-                
+            
         except sr.WaitTimeoutError:
             self.feedback_display.set_feedback("No speech detected. Please try again.", "", False)
             if self.auto_mode:
@@ -625,7 +685,16 @@ class PronunciationMaster:
         if self.current_level < len(self.levels) - 1:
             self.current_level += 1
             self.next_level_button.enabled = False
+            
+            # Reset any stuck state
+            current = self.levels[self.current_level]
+            if len(current.completed_sentences) == len(current.sentences):
+                # If somehow all sentences are already marked as completed, reset them
+                current.completed_sentences = set()
+                
+            # Get a new sentence from the next level
             self.next_sentence()
+            
             # Save progress when advancing levels
             self.save_progress()
         else:
@@ -663,6 +732,7 @@ class PronunciationMaster:
         # Draw buttons
         self.resume_button.draw(self.screen)
         self.restart_button.draw(self.screen)
+        self.toggle_dynamic_button.draw(self.screen)
         
         # Disable resume button if no saved progress
         self.resume_button.enabled = self.has_saved_progress
@@ -695,16 +765,29 @@ class PronunciationMaster:
                 # Update start screen button hover states
                 self.resume_button.check_hover(mouse_pos)
                 self.restart_button.check_hover(mouse_pos)
+                self.toggle_dynamic_button.check_hover(mouse_pos)
                 
                 # Handle start screen button clicks
                 if self.resume_button.is_clicked(mouse_pos, mouse_click) and self.has_saved_progress:
-                    # Resume from saved progress
+                    # Resume from saved progress - use existing sentences
                     self.load_progress()
                     self.game_started = True
                     self.next_sentence()
                 elif self.restart_button.is_clicked(mouse_pos, mouse_click):
-                    # Start new game from level 1
+                    # Start new game from level 1 with fresh sentences
+                    # Delete any existing progress file to ensure we get new sentences
+                    if os.path.exists("pronunciation_progress.json"):
+                        try:
+                            os.remove("pronunciation_progress.json")
+                        except:
+                            pass
                     self.initialize_levels(restart=True)
+                elif self.toggle_dynamic_button.is_clicked(mouse_pos, mouse_click):
+                    # Toggle dynamic sentence generation
+                    self.use_dynamic_sentences = not self.use_dynamic_sentences
+                    self.toggle_dynamic_button.text = "Dynamic: " + ("ON" if self.use_dynamic_sentences else "OFF")
+                    # Update the Bedrock client with the new setting
+                    self.bedrock_client.use_dynamic = self.use_dynamic_sentences
                 
                 # Draw start screen
                 self.draw_start_screen()
@@ -747,7 +830,7 @@ class PronunciationMaster:
                     
                     # Completion percentage
                     completion = current.get_completion_percentage()
-                    completion_text = f"Completion: {int(completion)}%"
+                    completion_text = f"Completion: {int(completion)}% ({len(current.completed_sentences)}/{len(current.sentences)})"
                     completion_surface = level_font.render(completion_text, True, 
                                                          GREEN if completion >= 70 else LIGHT_BLUE)
                     self.screen.blit(completion_surface, (WINDOW_WIDTH - 250, 50))
