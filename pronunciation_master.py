@@ -17,21 +17,47 @@ class Button:
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
         self.color = color
-        self.hover_color = (min(color[0] + 30, 255), min(color[1] + 30, 255), min(color[2] + 30, 255))
-        self.font = pygame.font.Font(None, FONT_SIZE)
+        
+        # Slightly lighter color for hover effect
+        hover_offset = 20
+        self.hover_color = (
+            min(color[0] + hover_offset, 255),
+            min(color[1] + hover_offset, 255),
+            min(color[2] + hover_offset, 255)
+        )
+        
+        # Bold, modern system font
+        self.font = pygame.font.SysFont('Arial', 20, bold=True)
+        
         self.is_hovered = False
         self.enabled = True
+
         
     def draw(self, screen):
-        color = self.hover_color if self.is_hovered and self.enabled else self.color
+        # Define button colors based on state
         if not self.enabled:
-            color = GRAY
-        pygame.draw.rect(screen, color, self.rect)
-        pygame.draw.rect(screen, WHITE, self.rect, 2)
-        
-        text_surface = self.font.render(self.text, True, WHITE)
+            base_color = GRAY
+        elif self.is_hovered:
+            base_color = self.hover_color
+        else:
+            base_color = self.color
+
+        # Draw subtle shadow
+        shadow_offset = 4
+        shadow_rect = pygame.Rect(self.rect.x + shadow_offset, self.rect.y + shadow_offset,
+                                self.rect.width, self.rect.height)
+        pygame.draw.rect(screen, DARK_GRAY, shadow_rect, border_radius=12)
+
+        # Draw button background
+        pygame.draw.rect(screen, base_color, self.rect, border_radius=12)
+
+        # Draw text centered in button
+        font = pygame.font.SysFont('Arial', 20, bold=True)
+        text_surface = font.render(self.text, True, WHITE)
         text_rect = text_surface.get_rect(center=self.rect.center)
         screen.blit(text_surface, text_rect)
+
+
         
     def check_hover(self, mouse_pos):
         self.is_hovered = self.rect.collidepoint(mouse_pos) and self.enabled
@@ -55,19 +81,27 @@ class Character:
         
     def draw(self, screen):
         if self.image:
+            # Draw character image
             screen.blit(self.image, self.rect)
         else:
-            # Draw placeholder if image not found
-            pygame.draw.rect(screen, GRAY, self.rect)
-            font = pygame.font.Font(None, 30)
+            # Draw a modern placeholder with rounded corners
+            placeholder_surf = pygame.Surface(self.rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(placeholder_surf, GRAY, placeholder_surf.get_rect(), border_radius=15)
+            screen.blit(placeholder_surf, self.rect.topleft)
+            
+            # Draw character name
+            font = pygame.font.SysFont("Arial", 20, bold=True)
             text = font.render(self.name, True, WHITE)
             text_rect = text.get_rect(center=self.rect.center)
             screen.blit(text, text_rect)
-            
-        # Draw speaking indicator
+
+        # Draw speaking indicator — glowing pulsing circle style
         if self.speaking:
-            pygame.draw.circle(screen, LIGHT_BLUE, 
-                              (self.rect.right - 20, self.rect.top + 20), 10)
+            indicator_radius = 12
+            indicator_pos = (self.rect.right - 20, self.rect.top + 20)
+            pygame.draw.circle(screen, LIGHT_BLUE, indicator_pos, indicator_radius)
+            pygame.draw.circle(screen, WHITE, indicator_pos, indicator_radius, 2)
+
 
 class SentenceDisplay:
     def __init__(self, x, y, width, height):
@@ -83,23 +117,38 @@ class SentenceDisplay:
         
     def draw(self, screen):
         # Draw box
-        pygame.draw.rect(screen, DARK_GRAY, self.rect)
-        pygame.draw.rect(screen, WHITE, self.rect, 2)
+        pygame.draw.rect(screen, DARK_GRAY, self.rect, border_radius=15)
+        pygame.draw.rect(screen, LIGHT_BLUE, self.rect, 2, border_radius=15)
         
-        # Draw sentence with word wrapping
+        # Draw sentence with improved word wrapping
         words = self.sentence.split(' ')
         line = ""
         y_offset = 20
+        max_width = self.rect.width - 40
         
         for word in words:
             test_line = line + word + " "
             test_width = self.font.size(test_line)[0]
             
-            if test_width > self.rect.width - 40:
-                text_surface = self.font.render(line, True, WHITE)
-                screen.blit(text_surface, (self.rect.x + 20, self.rect.y + y_offset))
-                y_offset += 40
-                line = word + " "
+            if test_width > max_width:
+                # If a single word is too long, break it
+                if not line and self.font.size(word)[0] > max_width:
+                    # Split the long word
+                    curr_word = word
+                    while curr_word:
+                        for i in range(len(curr_word), 0, -1):
+                            part = curr_word[:i]
+                            if self.font.size(part)[0] <= max_width:
+                                text_surface = self.font.render(part, True, WHITE)
+                                screen.blit(text_surface, (self.rect.x + 20, self.rect.y + y_offset))
+                                y_offset += 40
+                                curr_word = curr_word[i:]
+                                break
+                else:
+                    text_surface = self.font.render(line, True, WHITE)
+                    screen.blit(text_surface, (self.rect.x + 20, self.rect.y + y_offset))
+                    y_offset += 40
+                    line = word + " "
             else:
                 line = test_line
                 
@@ -110,8 +159,27 @@ class SentenceDisplay:
         
         # Draw context if available
         if self.context:
-            context_surface = self.small_font.render(f"Context: {self.context}", True, LIGHT_BLUE)
-            screen.blit(context_surface, (self.rect.x + 20, self.rect.y + y_offset))
+            # Handle long context with wrapping
+            context_text = f"Context: {self.context}"
+            words = context_text.split(' ')
+            line = ""
+            max_width = self.rect.width - 40
+            
+            for word in words:
+                test_line = line + word + " "
+                test_width = self.small_font.size(test_line)[0]
+                
+                if test_width > max_width:
+                    context_surface = self.small_font.render(line, True, LIGHT_BLUE)
+                    screen.blit(context_surface, (self.rect.x + 20, self.rect.y + y_offset))
+                    y_offset += 25
+                    line = word + " "
+                else:
+                    line = test_line
+                    
+            if line:
+                context_surface = self.small_font.render(line, True, LIGHT_BLUE)
+                screen.blit(context_surface, (self.rect.x + 20, self.rect.y + y_offset))
 
 class FeedbackDisplay:
     def __init__(self, x, y, width, height):
@@ -130,24 +198,39 @@ class FeedbackDisplay:
         if not self.text:
             return
             
-        # Draw box
-        pygame.draw.rect(screen, DARK_GRAY, self.rect)
-        pygame.draw.rect(screen, self.color, self.rect, 2)
+        # Draw box with rounded corners
+        pygame.draw.rect(screen, DARK_GRAY, self.rect, border_radius=15)
+        pygame.draw.rect(screen, self.color, self.rect, 2, border_radius=15)
         
-        # Draw text with word wrapping
+        # Draw text with improved word wrapping
         words = self.text.split(' ')
         line = ""
         y_offset = 20
+        max_width = self.rect.width - 40
         
         for word in words:
             test_line = line + word + " "
             test_width = self.font.size(test_line)[0]
             
-            if test_width > self.rect.width - 40:
-                text_surface = self.font.render(line, True, self.color)
-                screen.blit(text_surface, (self.rect.x + 20, self.rect.y + y_offset))
-                y_offset += 30
-                line = word + " "
+            if test_width > max_width:
+                # If a single word is too long, break it
+                if not line and self.font.size(word)[0] > max_width:
+                    # Split the long word
+                    curr_word = word
+                    while curr_word:
+                        for i in range(len(curr_word), 0, -1):
+                            part = curr_word[:i]
+                            if self.font.size(part)[0] <= max_width:
+                                text_surface = self.font.render(part, True, self.color)
+                                screen.blit(text_surface, (self.rect.x + 20, self.rect.y + y_offset))
+                                y_offset += 30
+                                curr_word = curr_word[i:]
+                                break
+                else:
+                    text_surface = self.font.render(line, True, self.color)
+                    screen.blit(text_surface, (self.rect.x + 20, self.rect.y + y_offset))
+                    y_offset += 30
+                    line = word + " "
             else:
                 line = test_line
                 
@@ -156,28 +239,54 @@ class FeedbackDisplay:
             screen.blit(text_surface, (self.rect.x + 20, self.rect.y + y_offset))
             y_offset += 30
             
-        # Draw correct pronunciation if available
+        # Draw correct pronunciation if available with wrapping
         if self.correct_pronunciation:
-            correct_text = f"Pronunciation tip: {self.correct_pronunciation}"
-            correct_surface = self.font.render(correct_text, True, WHITE)
-            screen.blit(correct_surface, (self.rect.x + 20, self.rect.y + y_offset))
+            tip_text = f"Pronunciation tip: {self.correct_pronunciation}"
+            words = tip_text.split(' ')
+            line = ""
+            
+            for word in words:
+                test_line = line + word + " "
+                test_width = self.font.size(test_line)[0]
+                
+                if test_width > max_width:
+                    correct_surface = self.font.render(line, True, WHITE)
+                    screen.blit(correct_surface, (self.rect.x + 20, self.rect.y + y_offset))
+                    y_offset += 30
+                    line = word + " "
+                else:
+                    line = test_line
+                    
+            if line:
+                correct_surface = self.font.render(line, True, WHITE)
+                screen.blit(correct_surface, (self.rect.x + 20, self.rect.y + y_offset))
 
 class StatusDisplay:
     def __init__(self, x, y, width, height):
         self.rect = pygame.Rect(x, y, width, height)
         self.status = "Ready"
-        self.font = pygame.font.Font(None, 24)
-        
+        self.font = pygame.font.SysFont("Arial", 22, bold=True)
+        self.padding = 10
+
     def set_status(self, status):
         self.status = status
-        
+
     def draw(self, screen):
-        pygame.draw.rect(screen, DARK_GRAY, self.rect)
-        pygame.draw.rect(screen, WHITE, self.rect, 2)
-        
+        # Draw shadow for modern depth effect
+        shadow_rect = self.rect.copy()
+        shadow_rect.x += 3
+        shadow_rect.y += 3
+        pygame.draw.rect(screen, (30, 30, 30), shadow_rect, border_radius=12)
+
+        # Draw background with border
+        pygame.draw.rect(screen, DARK_GRAY, self.rect, border_radius=12)
+        pygame.draw.rect(screen, LIGHT_BLUE, self.rect, 2, border_radius=12)
+
+        # Render and center the text
         text_surface = self.font.render(self.status, True, WHITE)
         text_rect = text_surface.get_rect(center=self.rect.center)
         screen.blit(text_surface, text_rect)
+
 
 class Level:
     def __init__(self, level_num, difficulty, sentences):
@@ -246,7 +355,7 @@ class PronunciationMaster:
         # Create character
         char_width, char_height = CHARACTER_WIDTH, CHARACTER_HEIGHT
         self.guide = Character("Teacher", "assets/avatar.png", 
-                              50, 100, char_width, char_height)
+                              80, 100, char_width, char_height)
         
         # Create UI elements
         self.sentence_display = SentenceDisplay(char_width + 100, 100, 
@@ -336,7 +445,7 @@ class PronunciationMaster:
                     for s in selected:
                         used_sentences.add(s["sentence"])
                         
-                    self.levels.append(Level(level_num, f"Level {level_num}", selected))
+                    self.levels.append(Level(level_num, f"{level_num}", selected))
             
             # Start with level 1
             self.current_level = 0
@@ -737,35 +846,44 @@ class PronunciationMaster:
         self.screen.fill(BLACK)
         
         # Draw title
-        title_font = pygame.font.Font(None, 60)
+        title_font = pygame.font.SysFont('Arial', 48, bold=True)
         title_text = "Pronunciation Master"
         title_surface = title_font.render(title_text, True, WHITE)
-        title_rect = title_surface.get_rect(center=(WINDOW_WIDTH // 2, 120))
+        title_rect = title_surface.get_rect(center=(WINDOW_WIDTH // 2, 100))
         self.screen.blit(title_surface, title_rect)
         
         # Draw subtitle
-        subtitle_font = pygame.font.Font(None, 30)
+        subtitle_font = pygame.font.SysFont('Arial', 24)
         subtitle_text = "Improve your pronunciation with 10 levels of practice"
         subtitle_surface = subtitle_font.render(subtitle_text, True, LIGHT_BLUE)
-        subtitle_rect = subtitle_surface.get_rect(center=(WINDOW_WIDTH // 2, 170))
+        subtitle_rect = subtitle_surface.get_rect(center=(WINDOW_WIDTH // 2, 150))
         self.screen.blit(subtitle_surface, subtitle_rect)
         
-        # Draw buttons
-        self.resume_button.draw(self.screen)
-        self.restart_button.draw(self.screen)
-        self.toggle_dynamic_button.draw(self.screen)
-        
-        # Disable resume button if no saved progress
+        # Set resume button state
         self.resume_button.enabled = self.has_saved_progress
         
         # Draw saved progress info if available
         if self.has_saved_progress and self.levels:
-            info_font = pygame.font.Font(None, 24)
+            info_font = pygame.font.SysFont('Arial', 20)
             level_info = f"Saved progress: Level {self.current_level + 1} of 10"
             info_surface = info_font.render(level_info, True, WHITE)
-            info_rect = info_surface.get_rect(center=(WINDOW_WIDTH // 2, 400))
+            info_rect = info_surface.get_rect(center=(WINDOW_WIDTH // 2, 200))
             self.screen.blit(info_surface, info_rect)
-    
+        
+        # Position buttons neatly
+        button_spacing = 80
+        base_y = 280
+
+        self.resume_button.rect.center = (WINDOW_WIDTH // 2, base_y)
+        self.restart_button.rect.center = (WINDOW_WIDTH // 2, base_y + button_spacing)
+        self.toggle_dynamic_button.rect.center = (WINDOW_WIDTH // 2, base_y + button_spacing * 2)
+
+        # Draw buttons
+        self.resume_button.draw(self.screen)
+        self.restart_button.draw(self.screen)
+        self.toggle_dynamic_button.draw(self.screen)
+
+
     def run(self):
         running = True
         while running:
@@ -839,7 +957,7 @@ class PronunciationMaster:
                     level_font = pygame.font.Font(None, 30)
                     
                     # Level info
-                    level_text = f"Level {current.level_num} - {current.difficulty}"
+                    level_text = f"Level {current.level_num}"
                     level_surface = level_font.render(level_text, True, WHITE)
                     self.screen.blit(level_surface, (50, 20))
                     
