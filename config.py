@@ -20,7 +20,7 @@ CHARACTER_WIDTH = 200
 CHARACTER_HEIGHT = 300
 
 # AWS settings
-MODEL_ID = "anthropic.claude-v2"
+MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 AWS_REGION = "us-east-1"
 USE_MOCK = False  # Set to False to use actual Bedrock API
-USE_DYNAMIC_SENTENCES = True  # Set to False to use hardcoded sentences
+USE_DYNAMIC_SENTENCES = True  # Always use dynamically generated sentences

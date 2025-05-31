@@ -276,7 +276,6 @@ class PronunciationMaster:
         self.bedrock_client = BedrockClient(
             model_id=MODEL_ID,
             region_name=AWS_REGION,
-            use_mock=USE_MOCK
         )
         
         # Game state
@@ -400,20 +399,42 @@ class PronunciationMaster:
         """
         
         try:
+            print(f"[INFO] Generating sentences for level {level_num} ({difficulty} difficulty)...")
             response = self.bedrock_client.generate_response(prompt)
             import re
-            
+        
             # Extract JSON from response
-            json_match = re.search(r'\\[.*\\]', response, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group(0))
-            else:
-                # Use mock sentences from the client
-                return self.bedrock_client._get_mock_sentences(difficulty)
+            try:
+                # Try direct JSON parsing first
+                sentences = json.loads(response)
+                print(f"[SUCCESS] Successfully extracted {len(sentences)} sentences")
+                return sentences
+            except json.JSONDecodeError:
+                # If that fails, try to extract JSON with regex
+                json_match = re.search(r'\[.*?\]', response, re.DOTALL)
+                if json_match:
+                    try:
+                        sentences = json.loads(json_match.group(0))
+                        print(f"[SUCCESS] Successfully extracted {len(sentences)} sentences")
+                        return sentences
+                    except json.JSONDecodeError:
+                        print("[ERROR] Failed to parse extracted JSON")
+                        print("[ERROR] Response content: " + response[:100] + "..." if len(response) > 100 else response)
+                        return [{"sentence": "Please try again later.", 
+                                "context": "API error recovery", 
+                                "pronunciation_tip": "Focus on clear pronunciation."}]
+                else:
+                    print("[ERROR] No JSON array found in response")
+                    print("[ERROR] Response content: " + response[:100] + "..." if len(response) > 100 else response)
+                    return [{"sentence": "Please try again later.", 
+                            "context": "API error recovery", 
+                            "pronunciation_tip": "Focus on clear pronunciation."}]
         except Exception as e:
-            print(f"Error generating sentences: {e}")
-            # Use mock sentences from the client
-            return self.bedrock_client._get_mock_sentences(difficulty)
+            print(f"[ERROR] Error generating sentences: {e}")
+            return [{"sentence": "Please try again later.", 
+                    "context": "API error recovery", 
+                    "pronunciation_tip": "Focus on clear pronunciation."}]
+
     
     def save_progress(self):
         """Save game progress to file"""
